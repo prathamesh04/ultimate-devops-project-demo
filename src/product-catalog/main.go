@@ -277,13 +277,17 @@ func (p *productCatalog) GetProduct(ctx context.Context, req *pb.GetProductReque
     span.AddEvent(msg)
     span.SetAttributes(
         attribute.String("app.product.name", found.Name),
-        attribute.Bool("app.product.found_successfully", true), // CHG: Added to verify CI pipeline trigger
     )
     return found, nil
 }
 
 func (p *productCatalog) SearchProducts(ctx context.Context, req *pb.SearchProductsRequest) (*pb.SearchProductsResponse, error) {
     span := trace.SpanFromContext(ctx)
+
+    // CHG: Add a span event to log the incoming query details for CI tracking
+    span.AddEvent("Executing product catalog search", trace.WithAttributes(
+        attribute.Int("app.search.query_length", len(req.Query)),
+    ))
 
     var result []*pb.Product
     for _, product := range catalog {
@@ -294,7 +298,6 @@ func (p *productCatalog) SearchProducts(ctx context.Context, req *pb.SearchProdu
     }
     span.SetAttributes(
         attribute.Int("app.products_search.count", len(result)),
-        attribute.String("ci.test.run", "active"), // CHG: Added placeholder attribute for CI validation
     )
     return &pb.SearchProductsResponse{Results: result}, nil
 }
@@ -312,7 +315,6 @@ func (p *productCatalog) checkProductFailure(ctx context.Context, id string) boo
 }
 
 func createClient(ctx context.Context, svcAddr string) (*grpc.ClientConn, error) {
-    // CHG: Added a minor comment update to ensure git registers a file change
     return grpc.DialContext(ctx, svcAddr,
         grpc.WithTransportCredentials(insecure.NewCredentials()),
         grpc.WithStatsHandler(otelgrpc.NewClientHandler()),

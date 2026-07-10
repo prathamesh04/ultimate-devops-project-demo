@@ -252,7 +252,7 @@ func (p *productCatalog) GetProduct(ctx context.Context, req *pb.GetProductReque
 
 	// GetProduct will fail on a specific product when feature flag is enabled
 	if p.checkProductFailure(ctx, req.Id) {
-		msg := "Error: Product Catalog Fail Feature Flag Enabled"
+		msg := fmt.Sprintf("Error: Product Catalog Fail Feature Flag Enabled")
 		span.SetStatus(otelcodes.Error, msg)
 		span.AddEvent(msg)
 		return nil, status.Errorf(codes.Internal, msg)
@@ -267,61 +267,51 @@ func (p *productCatalog) GetProduct(ctx context.Context, req *pb.GetProductReque
 	}
 
 	if found == nil {
-        msg := fmt.Sprintf("Product Not Found: %s", req.Id)
-        span.SetStatus(otelcodes.Error, msg)
-        span.AddEvent(msg)
-        return nil, status.Errorf(codes.NotFound, msg)
-    }
+		msg := fmt.Sprintf("Product Not Found: %s", req.Id)
+		span.SetStatus(otelcodes.Error, msg)
+		span.AddEvent(msg)
+		return nil, status.Errorf(codes.NotFound, msg)
+	}
 
-    msg := fmt.Sprintf("Product Found - ID: %s, Name: %s", req.Id, found.Name)
-    span.AddEvent(msg)
-    span.SetAttributes(
-        attribute.String("app.product.name", found.Name),
-    )
-    return found, nil
+	msg := fmt.Sprintf("Product Found - ID: %s, Name: %s", req.Id, found.Name)
+	span.AddEvent(msg)
+	span.SetAttributes(
+		attribute.String("app.product.name", found.Name),
+	)
+	return found, nil
 }
 
 func (p *productCatalog) SearchProducts(ctx context.Context, req *pb.SearchProductsRequest) (*pb.SearchProductsResponse, error) {
-    span := trace.SpanFromContext(ctx)
+	span := trace.SpanFromContext(ctx)
 
-    // CHG: Add a span event to log the incoming query details for CI tracking
-    span.AddEvent("Executing product catalog search", trace.WithAttributes(
-        attribute.Int("app.search.query_length", len(req.Query)),
-    ))
-
-    var result []*pb.Product
-    for _, product := range catalog {
-        if strings.Contains(strings.ToLower(product.Name), strings.ToLower(req.Query)) ||
-            strings.Contains(strings.ToLower(product.Description), strings.ToLower(req.Query)) {
-            result = append(result, product)
-        }
-    }
-    span.SetAttributes(
-        attribute.Int("app.products_search.count", len(result)),
-    )
-    return &pb.SearchProductsResponse{Results: result}, nil
+	var result []*pb.Product
+	for _, product := range catalog {
+		if strings.Contains(strings.ToLower(product.Name), strings.ToLower(req.Query)) ||
+			strings.Contains(strings.ToLower(product.Description), strings.ToLower(req.Query)) {
+			result = append(result, product)
+		}
+	}
+	span.SetAttributes(
+		attribute.Int("app.products_search.count", len(result)),
+	)
+	return &pb.SearchProductsResponse{Results: result}, nil
 }
 
 func (p *productCatalog) checkProductFailure(ctx context.Context, id string) bool {
-    if id != "OLJCESPC7Z" {
-        return false
-    }
+	if id != "OLJCESPC7Z" {
+		return false
+	}
 
-    client := openfeature.NewClient("productCatalog")
-    failureEnabled, _ := client.BooleanValue(
-        ctx, "productCatalogFailure", false, openfeature.EvaluationContext{},
-    )
-    return failureEnabled
+	client := openfeature.NewClient("productCatalog")
+	failureEnabled, _ := client.BooleanValue(
+		ctx, "productCatalogFailure", false, openfeature.EvaluationContext{},
+	)
+	return failureEnabled
 }
 
-func CreateClient(ctx context.Context, svcAddr string) (*grpc.ClientConn, error) {
-    return grpc.NewClient(svcAddr,
-        grpc.WithTransportCredentials(insecure.NewCredentials()),
-        grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
-    )
+func createClient(ctx context.Context, svcAddr string) (*grpc.ClientConn, error) {
+	return grpc.DialContext(ctx, svcAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
+	)
 }
-
-
-
-
-
